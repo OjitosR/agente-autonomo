@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from google import genai
 import resend
 
-# 1. Configuración de clientes
+# 1. Configuración de accesos
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 resend.api_key = os.environ.get("RESEND_API_KEY")
 DESTINATARIO = os.environ.get("EMAIL_DESTINO")
