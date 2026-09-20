@@ -8,15 +8,14 @@ from bs4 import BeautifulSoup
 from google import genai
 import resend
 
-# 1. Configuración de clientes
+# 1. Clientes
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 resend.api_key = os.environ.get("RESEND_API_KEY")
 
-# Lista de destinatarios en memoria
 EMAIL_BASE = os.environ.get("EMAIL_DESTINO")
 suscriptores = {EMAIL_BASE} if EMAIL_BASE else set()
 
-# 2. Servidor web para Render y Webhooks de Stripe
+# 2. Servidor web tolerante a eventos
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.send_response(200)
@@ -27,37 +26,46 @@ class WebhookHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-type', 'text/plain; charset=utf-8')
         self.end_headers()
-        self.wfile.write(f"Tech Alpha Intel activo. Suscriptores registrados: {len(suscriptores)}".encode('utf-8'))
+        self.wfile.write(f"Tech Alpha Intel activo. Suscriptores: {len(suscriptores)}".encode('utf-8'))
 
     def do_POST(self):
-        if self.path == "/webhook":
-            longitud = int(self.headers.get('Content-Length', 0))
-            cuerpo = self.rfile.read(longitud)
+        if "/webhook" in self.path:
             try:
-                evento = json.loads(cuerpo.decode('utf-8'))
+                longitud = int(self.headers.get('Content-Length', 0))
+                cuerpo = self.rfile.read(longitud) if longitud > 0 else b"{}"
+                datos_evento = json.loads(cuerpo.decode('utf-8'))
                 
-                # Detectar suscripción pagada en Stripe
-                if evento.get('type') == 'checkout.session.completed':
-                    datos = evento['data']['object']
-                    email_cliente = datos.get('customer_details', {}).get('email')
-                    if email_cliente:
-                        suscriptores.add(email_cliente)
-                        print(f"🎉 Nuevo suscriptor registrado automaticamente: {email_cliente}")
-                        
-                        # Correo de bienvenida inmediato
-                        resend.Emails.send({
-                            "from": "onboarding@resend.dev",
-                            "to": email_cliente,
-                            "subject": "🚀 Bienvenido a Tech Alpha Intel",
-                            "html": "<p>¡Tu suscripcion esta activa! Recibiras tu reporte de oportunidades cada manana.</p>"
-                        })
+                tipo_evento = datos_evento.get('type')
+                print(f"Evento recibido de Stripe: {tipo_evento}")
+
+                if tipo_evento == 'checkout.session.completed':
+                    objeto = datos_evento.get('data', {}).get('object', {})
+                    detalles_cliente = objeto.get('customer_details') or {}
+                    email = detalles_cliente.get('email') or objeto.get('customer_email')
+                    
+                    if email:
+                        suscriptores.add(email)
+                        print(f"🎉 Nuevo suscriptor registrado automaticamente: {email}")
+                        try:
+                            resend.Emails.send({
+                                "from": "onboarding@resend.dev",
+                                "to": email,
+                                "subject": "🚀 Bienvenido a Tech Alpha Intel",
+                                "html": "<p>¡Tu suscripcion esta activa! Recibiras tu reporte cada manana.</p>"
+                            })
+                        except Exception as e_mail:
+                            print(f"Aviso al enviar bienvenida: {e_mail}")
+                
                 self.send_response(200)
+                self.send_header('Content-type', 'text/plain')
                 self.end_headers()
                 self.wfile.write(b"OK")
             except Exception as e:
-                print(f"Error procesando webhook: {e}")
-                self.send_response(400)
+                print(f"Error procesando payload: {e}")
+                self.send_response(200)
+                self.send_header('Content-type', 'text/plain')
                 self.end_headers()
+                self.wfile.write(b"OK")
         else:
             self.send_response(404)
             self.end_headers()
@@ -68,7 +76,7 @@ def iniciar_servidor_web():
     print(f"Servidor web escuchando en el puerto {puerto}")
     servidor.serve_forever()
 
-# 3. Extracción y análisis de mercado
+# 3. Lógica del agente
 def extraer_datos():
     url = "https://news.ycombinator.com/"
     resp = requests.get(url, timeout=10)
