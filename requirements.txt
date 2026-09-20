@@ -1,0 +1,4 @@
+google-generativeai
+resend
+requests
+beautifulsoup4
