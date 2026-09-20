@@ -20,7 +20,7 @@ def extraer_datos():
 def analizar_con_gemini(datos):
     prompt = f"Resume brevemente estas oportunidades o novedades destacando su ángulo comercial:\n\n{datos}"
     respuesta = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.6-flash",
         contents=prompt,
     )
     return respuesta.text
