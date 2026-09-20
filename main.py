@@ -2,11 +2,11 @@ import os
 import time
 import requests
 from bs4 import BeautifulSoup
-import google.generativeai as genai
+from google import genai
 import resend
 
-# Configuración de credenciales
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+# 1. Configuración de clientes
+client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 resend.api_key = os.environ.get("RESEND_API_KEY")
 DESTINATARIO = os.environ.get("EMAIL_DESTINO")
 
@@ -18,9 +18,11 @@ def extraer_datos():
     return "\n".join(titulos)
 
 def analizar_con_gemini(datos):
-    model = genai.GenerativeModel("gemini-1.5-flash")
     prompt = f"Resume brevemente estas oportunidades o novedades destacando su ángulo comercial:\n\n{datos}"
-    respuesta = model.generate_content(prompt)
+    respuesta = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+    )
     return respuesta.text
 
 def ejecutar_tarea():
@@ -32,7 +34,7 @@ def ejecutar_tarea():
         "from": "onboarding@resend.dev",
         "to": DESTINATARIO,
         "subject": "⚡ Radar Diario de Negocios - Reporte Autónomo",
-        "html": f"<pre style='font-family: sans-serif;'>{reporte}</pre>"
+        "html": f"<pre style='font-family: sans-serif; font-size: 14px;'>{reporte}</pre>"
     })
     print("Reporte enviado con éxito.")
 
